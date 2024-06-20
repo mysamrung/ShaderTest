@@ -14,15 +14,15 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   m_Active: 1
   m_Settings:
-    AOMethod: 1
-    Downsample: 0
-    AfterOpaque: 0
+    AOMethod: 0
+    Downsample: 1
+    AfterOpaque: 1
     Source: 1
     NormalSamples: 1
-    Intensity: 0.5
+    Intensity: 0.2
     DirectLightingStrength: 0.25
-    Radius: 0.25
-    Samples: 0
+    Radius: 0.15
+    Samples: 1
     BlurQuality: 0
     Falloff: 100
     SampleCount: -1
@@ -63,7 +63,8 @@ MonoBehaviour:
     probeVolumeBlendStatesCS: {fileID: 0}
   m_RendererFeatures:
   - {fileID: -1878332245247344467}
-  m_RendererFeatureMap: adc0de57c6d2eee5
+  - {fileID: 6008367627506565037}
+  m_RendererFeatureMap: adc0de57c6d2eee5ad3f7c0586026253
   m_UseNativeRenderPass: 0
   xrSystemData: {fileID: 11400000, guid: 60e1133243b97e347b653163a8c01b64, type: 2}
   postProcessData: {fileID: 11400000, guid: 41439944d30ece34e96484bdb6645b55, type: 2}
@@ -82,8 +83,23 @@ MonoBehaviour:
     failOperation: 0
     zFailOperation: 0
   m_ShadowTransparentReceive: 1
-  m_RenderingMode: 0
+  m_RenderingMode: 1
   m_DepthPrimingMode: 0
   m_CopyDepthMode: 0
-  m_AccurateGbufferNormals: 0
+  m_AccurateGbufferNormals: 1
   m_IntermediateTextureMode: 1
+--- !u!114 &6008367627506565037
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 348993097d730ec459b08f1b07ecd99b, type: 3}
+  m_Name: WorldConstructFeature
+  m_EditorClassIdentifier: 
+  m_Active: 1
+  worldConstructureMaterial: {fileID: 2100000, guid: 61b7570a4a967e649bac3db5bccf64b6,
+    type: 2}

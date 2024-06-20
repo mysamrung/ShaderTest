@@ -76,8 +76,8 @@ public class GBufferDebugCPU : MonoBehaviour {
         localLightDirection.Normalize();
 
         foreach (Vector3 point in vertices) {
-            Vector3 globalPosition = shadowReceivePoint.transform.TransformPoint(point);
-            Vector3 localPosition = shadowCastMeshFilter.transform.InverseTransformPoint(globalPosition);
+            Vector3 worldPosition = shadowReceivePoint.transform.TransformPoint(point);
+            Vector3 localPosition = shadowCastMeshFilter.transform.InverseTransformPoint(worldPosition);
             //localPosition = localPoint;
 
             for (int i = 0; i < shadowCastMeshFilter.mesh.triangles.Length; i += 3) {
@@ -94,7 +94,7 @@ public class GBufferDebugCPU : MonoBehaviour {
                 Vector3 pointB = shadowCastMeshFilter.mesh.vertices[indexB];
                 Vector3 pointC = shadowCastMeshFilter.mesh.vertices[indexC];
 
-                Vector3[] points = new Vector3[] { pointA, pointB, pointC };
+                //Vector3[] points = new Vector3[] { pointA, pointB, pointC };
 
                 //Gizmos.DrawLineStrip(points, true);
 
@@ -103,7 +103,7 @@ public class GBufferDebugCPU : MonoBehaviour {
                 Vector3 center = (pointA + pointB + pointC) / 3;
                 Vector3 vec = localPosition - center;
                 
-                // if point is under caster's surface then ignore
+                // if point is above caster's surface then ignore
                 float dotVN = Vector3.Dot(vec, normal);
                 if (dotVN > 0)
                     continue;
@@ -127,8 +127,11 @@ public class GBufferDebugCPU : MonoBehaviour {
 
                 float t = -(Vector3.Dot(localPosition, normal) - d) / dotNLocalLight;
 
-                //if (t < 0)
-                //    continue;
+                // if direction to closest point is opposite to received's surface normal 
+                // or too close to receiver's point (consider as same point)
+                // then ignore
+                if (t <= closeOut)
+                    continue;
 
                 // progject receiver's point(pixel) to caster's surface
                 Vector3 snapLocalPosition = localPosition + (localLightDirection * t);
@@ -165,7 +168,7 @@ public class GBufferDebugCPU : MonoBehaviour {
                 //Debug.Log(na.magnitude + " " + ub + " " + uc + " " + un + " = " + uv);
 
                 Vector3 shadowPosition = shadowCastMeshFilter.transform.TransformPoint(snapLocalPosition);
-                shadowVertices.Add(globalPosition);
+                shadowVertices.Add(worldPosition);
 
                 break;
             }

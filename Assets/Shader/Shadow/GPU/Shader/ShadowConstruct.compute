@@ -1,0 +1,95 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+#define CLOSEVALUE 1e-07
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWTexture2D<float4> gWorldPositionTexture;
+RWTexture2D<float> resultShadowTexture;
+
+ByteAddressBuffer modelVertices;
+ByteAddressBuffer modelIndices;
+
+int indiceCount;
+
+RWTexture2D<float4> modelTexture;
+float2 modelTextureSize;
+
+float4x4 worldToObject;
+float3 localLightDirection;
+
+void LoadVertexData(uint index, inout float3 position, inout float2 uv) {
+    uint pi = index * (3 + 2) * 4; // index * (3[position.xyz] + 2[uv.xy]) * 4[bytes]
+    position = asfloat(modelVertices.Load3(pi + 0));
+    uv = asfloat(modelVertices.Load2(pi + (3 * 4)));
+}
+
+[numthreads(8,8,1)]
+void CSMain (uint3 id : SV_DispatchThreadID) {
+    float3 worldPosition = gWorldPositionTexture[id.xy].xyz;
+    float3 localPosition = mul(worldToObject, float4(worldPosition, 1)).xyz;
+
+    for(int i = 0; i < indiceCount; i += 3) {
+        // Load index data
+        uint3 triIndex = modelIndices.Load3(i * 3 * 4); // id * 3[triangle vertices] * 4[bytes]
+        
+        // Load vertex data
+        float3 pointA, pointB, pointC;
+        float2 uvA, uvB, uvC;
+
+        LoadVertexData(triIndex.x, pointA, uvA);
+        LoadVertexData(triIndex.y, pointB, uvB);
+        LoadVertexData(triIndex.z, pointC, uvC);
+    
+        float3 normal = normalize(cross(pointB - pointA, pointC - pointA));
+        float3 center = (pointA + pointB + pointC) / 3;
+        float3 vec = localPosition - center;
+
+         // if point is above caster's surface then ignore
+        float dotVN = dot(vec, normal);
+        if (dotVN > 0)
+            continue;
+
+        // if caster's surface is align to light direction then ignore
+        float dotNLocalLight = dot(localLightDirection, normal);
+        if (dotNLocalLight < 0)
+            continue;
+
+        float d = dot(normal, pointA);
+        float t = -(dot(localPosition, normal) - d) / dotNLocalLight;
+
+        // if direction to closest point is opposite to received's surface normal 
+        // or too close to receiver's point (consider as same point)
+        // then ignore
+        if (t <= CLOSEVALUE)
+            continue;
+
+         // progject receiver's point(pixel) to caster's surface
+        float3 snapLocalPosition = localPosition + (localLightDirection * t);
+
+        float3 na = cross(pointA - pointC, snapLocalPosition - pointA);
+        float3 nb = cross(pointB - pointA, snapLocalPosition - pointB);
+        float3 nc = cross(pointC - pointB, snapLocalPosition - pointC);
+
+        float d_ab = dot(na, nb);
+        float d_bc = dot(nb, nc);
+
+        // if projected point is out side surface then ignore
+        if (d_ab <= CLOSEVALUE || d_bc <= CLOSEVALUE)
+            continue;
+
+        // find uv at projected point on surface
+        float un = length(cross(pointA - pointB, pointA - pointC));
+        float ua = length(cross(pointB - snapLocalPosition, pointC - snapLocalPosition)) / un;
+        float ub = length(cross(pointC - snapLocalPosition, pointA - snapLocalPosition)) / un;
+        float uc = length(cross(pointA - snapLocalPosition, pointB - snapLocalPosition)) / un;
+
+        float2 uv = uvA * ua + uvB * ub + uvC * uc;
+        float alpha = modelTexture[round(uv * modelTextureSize)].w;
+
+        if(alpha < 1)
+            return;
+
+        resultShadowTexture[id.xy] = 1;
+    }
+}
