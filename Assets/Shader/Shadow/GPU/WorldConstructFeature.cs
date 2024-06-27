@@ -7,7 +7,8 @@ using UnityEditor.SearchService;
 
 public class WorldConstructFeature : ScriptableRendererFeature {
     public Material worldConstructureMaterial;
-    
+    public ComputeShader shadowConstructComputeShader;
+
     private WorldConstructPass m_RenderPass = null;
     public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData) {
         if (renderingData.cameraData.cameraType == CameraType.Game) {
@@ -18,7 +19,7 @@ public class WorldConstructFeature : ScriptableRendererFeature {
     }
 
     public override void Create() {
-        m_RenderPass = new WorldConstructPass(worldConstructureMaterial);
+        m_RenderPass = new WorldConstructPass(worldConstructureMaterial, shadowConstructComputeShader);
     }
 
     protected override void Dispose(bool disposing) {

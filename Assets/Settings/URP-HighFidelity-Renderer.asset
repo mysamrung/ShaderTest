@@ -103,3 +103,5 @@ MonoBehaviour:
   m_Active: 1
   worldConstructureMaterial: {fileID: 2100000, guid: 61b7570a4a967e649bac3db5bccf64b6,
     type: 2}
+  shadowConstructComputeShader: {fileID: 7200000, guid: 31bba6976d0cd9047b114755caac1d02,
+    type: 3}
