@@ -20,6 +20,8 @@ float4x4 objecToWorld;
 
 float3 localLightDirection;
 
+RWStructuredBuffer<float4> debugBuffer;
+
 void LoadVertexData(uint index, out float3 position, out float2 uv) {
     uint pi = index * 56; // index * (3[position.xyz] + 2[uv.xy]) * 4[bytes]
     position = asfloat(modelVertices.Load3(pi + 0));
@@ -60,10 +62,10 @@ uint3 loadTriangleIndices(uint nTriangle)
 
 [numthreads(8,8,1)]
 void CSMain (uint3 id : SV_DispatchThreadID) {
-    float3 worldPosition = gWorldPositionTexture[id.xy].xyz;
+    float3 worldPosition = (gWorldPositionTexture[id.xy]).xyz;
     float3 localPosition = mul(worldToObject, float4(worldPosition, 1)).xyz;
     
-    resultShadowTexture[id.xy] = 1;
+    resultShadowTexture[id.xy] =  0;
     for (int i = 0; i < 3; i += 3)
     {
         // Load index data
@@ -77,24 +79,28 @@ void CSMain (uint3 id : SV_DispatchThreadID) {
         LoadVertexData(triIndex.y, pointB, uvB);
         LoadVertexData(triIndex.z, pointC, uvC);
     
+        pointA = float3(0, 0, -0.25f);
+        pointB = float3(0, -0.25, 0.25f);
+        pointC = float3(0, 0.25, 0.25f);
+        
         float3 normal = normalize(cross(pointB - pointA, pointC - pointA));
         float3 center = (pointA + pointB + pointC) / 3;
         float3 vec = localPosition - center;
+        float planeD = normal.x * pointA.x - normal.y * pointA.y - normal.z * pointA.z;
         
          // if point is above caster's surface then ignore
         float dotVN = dot(vec, normal);
         if (dotVN > 0)
             continue;
         
-        
         // if caster's surface is align to light direction then ignore
         float dotNLocalLight = dot(localLightDirection, normal);
-        if (dotNLocalLight < 0)
+        if (dotNLocalLight > 0)
             continue;
         
         
         float d = dot(normal, pointA);
-        float t = -(dot(localPosition, normal) - d) / dotNLocalLight;
+        float t = (dot(vec, normal) + d) / dotNLocalLight;
 
         // if direction to closest point is opposite to received's surface normal 
         // or too close to receiver's point (consider as same point)
@@ -103,7 +109,7 @@ void CSMain (uint3 id : SV_DispatchThreadID) {
             continue;
         
          // progject receiver's point(pixel) to caster's surface
-        float3 snapLocalPosition = localPosition + (localLightDirection * t);
+        float3 snapLocalPosition = localPosition + (localLightDirection * -(t + planeD));
 
         float3 na = cross(pointA - pointC, snapLocalPosition - pointA);
         float3 nb = cross(pointB - pointA, snapLocalPosition - pointB);
@@ -112,6 +118,10 @@ void CSMain (uint3 id : SV_DispatchThreadID) {
         float d_ab = dot(na, nb);
         float d_bc = dot(nb, nc);
         
+        if (d_ab <= 0 || d_bc <= 0)
+            continue;
+        
+        resultShadowTexture[id.xy] = 1;
         //// find uv at projected point on surface
         //float un = length(cross(pointA - pointB, pointA - pointC));
         //float ua = length(cross(pointB - snapLocalPosition, pointC - snapLocalPosition)) / un;
@@ -124,7 +134,6 @@ void CSMain (uint3 id : SV_DispatchThreadID) {
         //if(alpha < 1)
         //    return;
 
-        resultShadowTexture[id.xy] *= 0;
         return;
     }
 }

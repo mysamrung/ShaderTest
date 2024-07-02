@@ -23,6 +23,12 @@ public class WorldConstructPass : ScriptableRenderPass {
     public static RenderTexture resultWorldPositionRenderTexture;
     public static RenderTexture resultShadowRenderTexture;
 
+    public static ComputeBuffer debugBuffer;
+    public static Vector4[] debugData;
+
+    public static bool readBuffer;
+
+    private RTHandle cameraColorTarget;
     public WorldConstructPass(Material worldConstructureMaterial, ComputeShader shadowConstructComputeShader) {
         _filteringSettings = new FilteringSettings(_renderQueueRange);
         renderPassEvent = _renderPassEvent;
@@ -47,6 +53,8 @@ public class WorldConstructPass : ScriptableRenderPass {
                                             RenderTextureFormat.Default,
                                             RenderTextureReadWrite.Default
                                         );
+
+            resultWorldPositionRenderTexture.format = RenderTextureFormat.ARGBFloat;
             resultWorldPositionRenderTexture.enableRandomWrite = true;
             resultWorldPositionRenderTexture.Create();
         } 
@@ -54,12 +62,34 @@ public class WorldConstructPass : ScriptableRenderPass {
         if(resultShadowRenderTexture == null) {
             resultShadowRenderTexture = new RenderTexture(
                                             cameraTextureDescriptor.width, cameraTextureDescriptor.height,
-                                            0
+                                            24,
+                                            RenderTextureFormat.Default,
+                                            RenderTextureReadWrite.Default
                                         );
             resultShadowRenderTexture.enableRandomWrite = true;
             resultShadowRenderTexture.format = RenderTextureFormat.RFloat;
             resultShadowRenderTexture.Create();
         }
+
+
+        if (debugData == null) {
+            int bufferCount = cameraTextureDescriptor.width * cameraTextureDescriptor.height;
+            debugData = new Vector4[bufferCount];
+            for(int i = 0; i < bufferCount; i++) {
+                debugData[i] = Vector4.zero;
+            }
+            Debug.Log(bufferCount);
+        }
+
+        if (debugBuffer == null) {
+            int bufferCount = cameraTextureDescriptor.width * cameraTextureDescriptor.height;
+            debugBuffer = new ComputeBuffer(bufferCount, 16, ComputeBufferType.Default);
+            debugBuffer.SetData(debugData);
+        }
+    }
+
+    public void SetupRenderPass(ScriptableRenderer renderer, in RenderingData renderingData) {
+        cameraColorTarget = renderer.cameraColorTargetHandle;
     }
 
     // ƒŒƒ“ƒ_ƒŠƒ“ƒOˆ—‚ð‘‚­
@@ -80,6 +110,8 @@ public class WorldConstructPass : ScriptableRenderPass {
         using (new ProfilingScope(commandBuffer, _profilingSampler)) {
             commandBuffer.SetRenderTarget(resultWorldPositionRenderTexture);
             commandBuffer.DrawMesh(RenderingUtils.fullscreenMesh, Matrix4x4.identity, _worldConstructureMaterial);
+
+            commandBuffer.SetRenderTarget(cameraColorTarget);
 
             // Test
             GameObject shadowCaster = GameObject.FindGameObjectWithTag("TestShadow");
@@ -102,10 +134,11 @@ public class WorldConstructPass : ScriptableRenderPass {
 
                 Vector2 modelTextureSize = modelTexture.texelSize;
 
-                Matrix4x4 worldToobject = Matrix4x4.Transpose(shadowCaster.transform.worldToLocalMatrix);
+                Matrix4x4 worldToobject = shadowCaster.transform.worldToLocalMatrix;
                 Matrix4x4 objectToWorld = shadowCaster.transform.localToWorldMatrix;
 
                 Vector3 localLightDirection = shadowCaster.transform.InverseTransformDirection(directionalLights[0].transform.forward).normalized;
+                localLightDirection.Normalize();
 
                 int csMainKernel = _shadowConstructComputeShader.FindKernel("CSMain");
                 _shadowConstructComputeShader.GetKernelThreadGroupSizes(
@@ -126,6 +159,8 @@ public class WorldConstructPass : ScriptableRenderPass {
                 commandBuffer.SetComputeMatrixParam(_shadowConstructComputeShader, "objectToWorld", objectToWorld);
                 commandBuffer.SetComputeVectorParam(_shadowConstructComputeShader, "localLightDirection", localLightDirection);
 
+                commandBuffer.SetComputeBufferParam(_shadowConstructComputeShader, csMainKernel, "debugBuffer", debugBuffer);
+
                 commandBuffer.DispatchCompute(
                     _shadowConstructComputeShader,
                     csMainKernel,
@@ -134,6 +169,11 @@ public class WorldConstructPass : ScriptableRenderPass {
                     1
                 );
 
+                if(readBuffer) {
+                    debugBuffer.GetData(debugData);
+                    readBuffer = false;
+                }
+               
 
                 string verts = "";
                 foreach(var vertex in mesh.vertices) {
@@ -144,8 +184,8 @@ public class WorldConstructPass : ScriptableRenderPass {
                 foreach (var tri in mesh.triangles) {
                     tris += tri + "\n";
                 }
-                Debug.Log(tris + " Triangles Count" + indexBuffer.count);
-                Debug.Log(verts + "  Vertex Count" + vertexBuffer.count);
+                //Debug.Log(tris + " Triangles Count" + indexBuffer.count);
+                //Debug.Log(verts + "  Vertex Count" + vertexBuffer.count);
             }
         }
 

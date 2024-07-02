@@ -22,6 +22,10 @@ public class WorldConstructFeature : ScriptableRendererFeature {
         m_RenderPass = new WorldConstructPass(worldConstructureMaterial, shadowConstructComputeShader);
     }
 
+    public override void SetupRenderPasses(ScriptableRenderer renderer, in RenderingData renderingData) {
+        m_RenderPass.SetupRenderPass(renderer, renderingData);
+    }
+
     protected override void Dispose(bool disposing) {
     }
 }
