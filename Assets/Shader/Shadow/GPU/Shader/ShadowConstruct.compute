@@ -1,6 +1,6 @@
 // Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel CSMain
-#define CLOSEVALUE 1e-07
+#define CLOSEVALUE 0.1
 
 // Create a RenderTexture with enableRandomWrite flag and set it
 // with cs.SetTexture
@@ -10,6 +10,7 @@ RWTexture2D<float> resultShadowTexture;
 ByteAddressBuffer modelVertices;
 ByteAddressBuffer modelIndices;
 
+int vertexStride;
 int indexCount;
 
 Texture2D<float4> modelTexture;
@@ -23,7 +24,7 @@ float3 localLightDirection;
 RWStructuredBuffer<float4> debugBuffer;
 
 void LoadVertexData(uint index, out float3 position, out float2 uv) {
-    uint pi = index * 56; // index * (3[position.xyz] + 2[uv.xy]) * 4[bytes]
+    uint pi = index * vertexStride; // index * (3[position.xyz] + 2[uv.xy]) * 4[bytes]
     position = asfloat(modelVertices.Load3(pi + 0));
     uv = asfloat(modelVertices.Load2(pi + (3 * 4)));
 }
@@ -34,7 +35,7 @@ uint3 loadTriangleIndices(uint nTriangle)
 {
 #if defined(INDEX_FORMAT_16)
     // stolen from: https://github.com/microsoft/DirectX-Graphics-Samples/blob/master/Samples/Desktop/D3D12Raytracing/src/D3D12RaytracingSimpleLighting/Raytracing.hlsl
-    uint offsetBytes = nTriangle * 6;
+    uint offsetBytes = nTriangle * 2;
     uint dwordAlignedOffset = offsetBytes & ~3;
     uint2 four16BitIndices = modelIndices.Load2(dwordAlignedOffset);
     uint3 indices;
@@ -66,8 +67,7 @@ void CSMain (uint3 id : SV_DispatchThreadID) {
     float3 localPosition = mul(worldToObject, float4(worldPosition, 1)).xyz;
     
     resultShadowTexture[id.xy] =  0;
-    for (int i = 0; i < 3; i += 3)
-    {
+    for (int i = 0; i < indexCount; i += 3) {
         // Load index data
         uint3 triIndex = loadTriangleIndices(i); // id * 3[triangle vertices] * 4[bytes]
         
@@ -78,10 +78,12 @@ void CSMain (uint3 id : SV_DispatchThreadID) {
         LoadVertexData(triIndex.x, pointA, uvA);
         LoadVertexData(triIndex.y, pointB, uvB);
         LoadVertexData(triIndex.z, pointC, uvC);
-    
-        pointA = float3(0, 0, -0.25f);
-        pointB = float3(0, -0.25, 0.25f);
-        pointC = float3(0, 0.25, 0.25f);
+        
+        if(id.x == 0 && id.y == 0) {
+            debugBuffer[i + 0] = float4(pointA, triIndex.x);
+            debugBuffer[i + 1] = float4(pointB, triIndex.y);
+            debugBuffer[i + 2] = float4(pointC, triIndex.z);
+        }
         
         float3 normal = normalize(cross(pointB - pointA, pointC - pointA));
         float3 center = (pointA + pointB + pointC) / 3;
@@ -98,9 +100,8 @@ void CSMain (uint3 id : SV_DispatchThreadID) {
         if (dotNLocalLight > 0)
             continue;
         
-        
         float d = dot(normal, pointA);
-        float t = (dot(vec, normal) + d) / dotNLocalLight;
+        float t = (dotVN + d) / dotNLocalLight;
 
         // if direction to closest point is opposite to received's surface normal 
         // or too close to receiver's point (consider as same point)
@@ -109,7 +110,7 @@ void CSMain (uint3 id : SV_DispatchThreadID) {
             continue;
         
          // progject receiver's point(pixel) to caster's surface
-        float3 snapLocalPosition = localPosition + (localLightDirection * -(t + planeD));
+        float3 snapLocalPosition = localPosition + (localLightDirection * -(t - planeD));
 
         float3 na = cross(pointA - pointC, snapLocalPosition - pointA);
         float3 nb = cross(pointB - pointA, snapLocalPosition - pointB);
@@ -118,7 +119,7 @@ void CSMain (uint3 id : SV_DispatchThreadID) {
         float d_ab = dot(na, nb);
         float d_bc = dot(nb, nc);
         
-        if (d_ab <= 0 || d_bc <= 0)
+        if (d_ab < 0 || d_bc < 0)
             continue;
         
         resultShadowTexture[id.xy] = 1;

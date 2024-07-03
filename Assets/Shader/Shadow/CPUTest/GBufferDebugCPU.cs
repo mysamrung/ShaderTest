@@ -29,6 +29,11 @@ public class GBufferDebugCPU : MonoBehaviour {
     private List<Vector3> shadowVertices = new List<Vector3>();
     private List<Vector3> snapPos = new List<Vector3>();
 
+    [SerializeField]
+    private SphereDebugCPU sphereDebugCPU;
+
+    private List<SphereDebugCPU> sphereDebugs = new List<SphereDebugCPU>();
+
     public void Start() {
         //vertices = shadowCastMeshFilter.mesh.vertices;
         //List<int> triangle = new List<int>();
@@ -47,6 +52,11 @@ public class GBufferDebugCPU : MonoBehaviour {
                 StartCoroutine(CalculateShadow());
             }
             calculate = false;
+        }
+
+        if (Input.GetMouseButtonUp(0)) {
+            foreach (Vector3 point in shadowVertices) {
+            }
         }
     }
 
@@ -84,6 +94,11 @@ public class GBufferDebugCPU : MonoBehaviour {
 
         string lPoints = string.Empty;
 
+        for(int i = 0; i < sphereDebugs.Count; i++) {
+            Destroy(sphereDebugs[i].gameObject);   
+        }
+        sphereDebugs.Clear();
+
         foreach (Vector3 point in vertices) {
             Vector3 worldPosition = shadowReceivePoint.transform.TransformPoint(point);
             Vector3 localPosition = shadowCastMeshFilter.transform.InverseTransformPoint(worldPosition);
@@ -109,7 +124,14 @@ public class GBufferDebugCPU : MonoBehaviour {
 
                 //Gizmos.DrawLineStrip(points, true);
 
-                Vector3 normal = Vector3.Cross(pointB - pointA, pointC - pointA).normalized;
+                Vector3 BAVec = pointB - pointA;
+                Vector3 CAVec = pointC - pointA;
+
+                Vector3 normal = Vector3.Cross(BAVec, CAVec).normalized;
+                Vector3 normalA = Vector3.Cross(BAVec, CAVec);
+                float area = normal.magnitude / 2;
+
+                normal.Normalize();
 
                 Vector3 center = (pointA + pointB + pointC) / 3;
                 Vector3 vec = localPosition - center;
@@ -126,7 +148,7 @@ public class GBufferDebugCPU : MonoBehaviour {
                     continue;
 
                 float d = Vector3.Dot(normal, pointA);
-                float t = (Vector3.Dot(vec, normal) + d) / dotNLocalLight;
+                float t = (dotVN + d) / dotNLocalLight;
 
                 // if direction to closest point is opposite to received's surface normal 
                 // or too close to receiver's point (consider as same point)
@@ -134,27 +156,52 @@ public class GBufferDebugCPU : MonoBehaviour {
                 if (t <= closeOut)
                     continue;
 
-                Debug.Log(dotNLocalLight);
+                //Debug.Log(dotNLocalLight);
+
                 // progject receiver's point(pixel) to caster's surface
-                Vector3 snapLocalPosition = localPosition + (localLightDirection * -(t + planeD));
+                Vector3 snapLocalPosition = localPosition + (localLightDirection * -(t - planeD));
                 snapPos.Add(shadowCastMeshFilter.transform.TransformPoint(snapLocalPosition));
 
                 //Gizmos.DrawRay(shadowCastMeshFilter.transform.position, normal);
                 //Gizmos.DrawWireSphere(shadowCastMeshFilter.transform.TransformPoint(localPosition), 0.05f);
 
-                Vector3 na = Vector3.Cross(pointA - pointC, snapLocalPosition - pointA);
-                Vector3 nb = Vector3.Cross(pointB - pointA, snapLocalPosition - pointB);
-                Vector3 nc = Vector3.Cross(pointC - pointB, snapLocalPosition - pointC);
+                //Vector3 na = Vector3.Cross(pointA - pointC, snapLocalPosition - pointA);
+                //Vector3 nb = Vector3.Cross(pointB - pointA, snapLocalPosition - pointB);
+                //Vector3 nc = Vector3.Cross(pointC - pointB, snapLocalPosition - pointC);
 
-                float d_ab = Vector3.Dot(na, nb);
-                float d_bc = Vector3.Dot(nb, nc);
+                //float d_ab = Vector3.Dot(na, nb);
+                //float d_bc = Vector3.Dot(nb, nc);
+
 
                 //Debug.Log("S2: " + i + " " + d_ab + " " + d_bc);
-                
-                // if projected point is out side surface then ignore
-                if (d_ab <= closeOut || d_bc <= closeOut)
-                    continue;
 
+                //// if projected point is out side surface then ignore
+                //if (d_ab <= closeOut || d_bc <= closeOut)
+                //    continue;
+
+                Vector3 na = Vector3.Cross(pointB - pointA, snapLocalPosition - pointA);
+                Vector3 nb = Vector3.Cross(snapLocalPosition - pointA, pointC - pointA);
+
+                float alpha = Vector3.Dot(na, normalA) / (normalA.sqrMagnitude);
+                float beta = Vector3.Dot(nb, normalA) / (normalA.sqrMagnitude);
+                float gamma = 1 - alpha - beta;
+
+                SphereDebugCPU debugSphere = Instantiate(sphereDebugCPU);
+                debugSphere.transform.position = shadowCastMeshFilter.transform.TransformPoint(snapLocalPosition);
+                debugSphere.alpha = alpha;
+                debugSphere.beta = beta;
+                debugSphere.gamma = gamma;
+                sphereDebugs.Add(debugSphere);
+
+                float inv_abg = 1 - (alpha + beta + gamma);
+
+                bool isInside = alpha >= -0.005f && alpha <= 1.005f &&
+                                beta >= -0.005f && beta <= 1.005f &&
+                                gamma >= -0.005f && gamma <= 1.005f;
+
+                // if projected point is out side surface then ignore
+                if (!isInside)
+                    continue;
 
                 // find uv at projected point on surface
                 float un = Vector3.Cross(pointA - pointB, pointA - pointC).magnitude;
@@ -264,6 +311,7 @@ public class GBufferDebugCPU : MonoBehaviour {
                 //Debug.Log("S2: " + i + " " + d_ab + " " + d_bc);
 
                 // if projected point is out side surface then ignore
+
                 if (d_ab <= closeOut || d_bc <= closeOut)
                     continue;
 

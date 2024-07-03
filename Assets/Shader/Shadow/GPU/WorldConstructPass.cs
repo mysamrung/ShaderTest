@@ -152,6 +152,7 @@ public class WorldConstructPass : ScriptableRenderPass {
                 commandBuffer.SetComputeTextureParam(_shadowConstructComputeShader, csMainKernel, "resultShadowTexture", resultShadowRenderTexture);
                 commandBuffer.SetComputeBufferParam(_shadowConstructComputeShader, csMainKernel, "modelVertices", vertexBuffer);
                 commandBuffer.SetComputeBufferParam(_shadowConstructComputeShader, csMainKernel, "modelIndices", indexBuffer);
+                commandBuffer.SetComputeIntParam(_shadowConstructComputeShader, "vertexStride", vertexBuffer.stride);
                 commandBuffer.SetComputeIntParam(_shadowConstructComputeShader, "indexCount", indexCount);
                 commandBuffer.SetComputeTextureParam(_shadowConstructComputeShader, csMainKernel, "modelTexture", modelTexture);
                 commandBuffer.SetComputeVectorParam(_shadowConstructComputeShader, "modelTextureSize", modelTextureSize);
