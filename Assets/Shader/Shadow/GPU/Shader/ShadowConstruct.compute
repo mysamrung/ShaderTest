@@ -1,6 +1,6 @@
 // Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel CSMain
-#define CLOSEVALUE 0.1
+#define CLOSEVALUE -0.001
 
 // Create a RenderTexture with enableRandomWrite flag and set it
 // with cs.SetTexture
@@ -79,47 +79,43 @@ void CSMain (uint3 id : SV_DispatchThreadID) {
         LoadVertexData(triIndex.y, pointB, uvB);
         LoadVertexData(triIndex.z, pointC, uvC);
         
-        if(id.x == 0 && id.y == 0) {
-            debugBuffer[i + 0] = float4(pointA, triIndex.x);
-            debugBuffer[i + 1] = float4(pointB, triIndex.y);
-            debugBuffer[i + 2] = float4(pointC, triIndex.z);
-        }
+        float3 BAVec = pointB - pointA;
+        float3 CAVec = pointC - pointA;
         
-        float3 normal = normalize(cross(pointB - pointA, pointC - pointA));
-        float3 center = (pointA + pointB + pointC) / 3;
-        float3 vec = localPosition - center;
-        float planeD = normal.x * pointA.x - normal.y * pointA.y - normal.z * pointA.z;
-        
-         // if point is above caster's surface then ignore
-        float dotVN = dot(vec, normal);
-        if (dotVN > 0)
-            continue;
+        float3 normalRaw = cross(BAVec, CAVec);
         
         // if caster's surface is align to light direction then ignore
-        float dotNLocalLight = dot(localLightDirection, normal);
+        float dotNLocalLight = dot(localLightDirection, normalRaw);
         if (dotNLocalLight > 0)
             continue;
         
-        float d = dot(normal, pointA);
-        float t = (dotVN + d) / dotNLocalLight;
-
+        float area = dot(normalRaw, normalRaw);
+        float3 normal = normalRaw / sqrt(area);
+        
+        float3 vec = localPosition - pointA;
+        
         // if direction to closest point is opposite to received's surface normal 
         // or too close to receiver's point (consider as same point)
         // then ignore
-        if (t <= CLOSEVALUE)
+        float dotVN = dot(vec, normal);
+        if (dotVN > CLOSEVALUE)
             continue;
         
          // progject receiver's point(pixel) to caster's surface
-        float3 snapLocalPosition = localPosition + (localLightDirection * -(t - planeD));
+        float3 snapLocalPosition = localPosition + (localLightDirection * dotVN);
 
-        float3 na = cross(pointA - pointC, snapLocalPosition - pointA);
-        float3 nb = cross(pointB - pointA, snapLocalPosition - pointB);
-        float3 nc = cross(pointC - pointB, snapLocalPosition - pointC);
-
-        float d_ab = dot(na, nb);
-        float d_bc = dot(nb, nc);
+        float3 na = cross(BAVec, snapLocalPosition - pointA);
+        float alpha = dot(na, normalRaw) / area;
+        if(alpha < 0 || alpha > 1)
+            continue;
         
-        if (d_ab < 0 || d_bc < 0)
+        float3 nb = cross(snapLocalPosition - pointA, CAVec);
+        float beta = dot(nb, normalRaw) / area;
+        if (beta < 0 || beta > 1)
+            continue;
+        
+        float gamma = 1 - alpha - beta;
+        if (gamma < 0 || gamma > 1)
             continue;
         
         resultShadowTexture[id.xy] = 1;
