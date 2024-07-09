@@ -137,6 +137,8 @@ public class GBufferDebugCPU : MonoBehaviour {
                 float area = Vector3.Dot(normalRaw, normalRaw);
                 Vector3 normal = normalRaw / Mathf.Sqrt(area);
 
+                float planeD = normal.x * pointA.x - normal.y * pointA.y - normal.z * pointA.z;
+
                 // if caster's surface is align to light direction then ignore
                 float dotNLocalLight = Vector3.Dot(localLightDirection, normal);
                 if (dotNLocalLight > dotOut)
@@ -144,15 +146,16 @@ public class GBufferDebugCPU : MonoBehaviour {
 
                 Vector3 vec = localPosition - pointA;
                 float dotVN = Vector3.Dot(vec, normal);
-
+                float t = (dotVN) / Vector3.Dot(-localLightDirection, normal);
+                
                 // if direction to closest point is opposite to received's surface normal 
                 // or too close to receiver's point (consider as same point)
                 // then ignore
-                if (dotVN > closeOut)
+                if (t > closeOut)
                     continue;
 
                 // progject receiver's point(pixel) to caster's surface
-                Vector3 snapLocalPosition = localPosition + (localLightDirection * (dotVN));
+                Vector3 snapLocalPosition = localPosition + (localLightDirection * (t));
                 snapPos.Add(shadowCastMeshFilter.transform.TransformPoint(snapLocalPosition));
 
                 //Gizmos.DrawRay(shadowCastMeshFilter.transform.position, normal);
