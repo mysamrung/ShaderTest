@@ -3,8 +3,25 @@ using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 using static UnityEngine.XR.XRDisplaySubsystem;
 using UnityEngine.UIElements;
+using System.Runtime.InteropServices;
+using UnityEditor.Rendering.Universal.ShaderGUI;
 
 public class WorldConstructPass : ScriptableRenderPass {
+    private struct MeshTriangleProperty {
+        Vector3 normalRaw;
+        float normalArea;
+        Vector3 normal;
+        float normalLength;
+
+        Vector3 pointA;
+        float triangleCALength2;
+
+        Vector3 pointB;
+        float ln;
+
+        Vector3 pointC;
+    };
+
     // FrameDebugger‚âProfiler—p‚Ì–¼‘O
     private const string ProfilerTag = nameof(WorldConstructPass);
     private readonly ProfilingSampler _profilingSampler = new ProfilingSampler(ProfilerTag);
@@ -83,7 +100,7 @@ public class WorldConstructPass : ScriptableRenderPass {
 
         if (debugBuffer == null) {
             int bufferCount = cameraTextureDescriptor.width * cameraTextureDescriptor.height;
-            debugBuffer = new ComputeBuffer(bufferCount, 16, ComputeBufferType.Default);
+            debugBuffer = new ComputeBuffer(bufferCount, Marshal.SizeOf(typeof(Vector4)), ComputeBufferType.Default);
             debugBuffer.SetData(debugData);
         }
     }
@@ -142,21 +159,21 @@ public class WorldConstructPass : ScriptableRenderPass {
                 Vector3 localLightDirection = shadowCaster.transform.InverseTransformDirection(globalLightDirection).normalized;
                 localLightDirection.Normalize();
 
-                float objectBoundSize = Mathf.Max(meshRenderer.bounds.size.x, meshRenderer.bounds.center.y, meshRenderer.bounds.center.z);
-                Vector4 objectCenterXYZRadiusW = new Vector4(
-                    meshRenderer.bounds.center.x,
-                    meshRenderer.bounds.center.y,
-                    meshRenderer.bounds.center.z,
-                    objectBoundSize * objectBoundSize
-                ); ;
+                Vector3 objectCenter = meshRenderer.bounds.center;
+                Vector3 objectBound = meshRenderer.bounds.size;
 
                 int csMainKernel = _shadowConstructComputeShader.FindKernel("CSMain");
                 _shadowConstructComputeShader.GetKernelThreadGroupSizes(
                     csMainKernel, 
-                    out uint numThreadsX, 
-                    out uint numThreadsY, 
-                    out uint numThreadsZ
+                    out uint mainThreadnumThreadsX, 
+                    out uint mainThreadnumThreadsY, 
+                    out uint mainThreadnumThreadsZ
                 );
+
+                //ComputeBuffer meshTriangleBuffer = new ComputeBuffer(indexCount, Marshal.SizeOf(typeof(Vector3)), ComputeBufferType.Default);
+
+                //ComputeBuffer triangleIndexListBuffer = new ComputeBuffer(indexCount, Marshal.SizeOf(typeof(int)), ComputeBufferType.Append);
+                //triangleIndexListBuffer.SetCounterValue(0);
 
                 commandBuffer.SetComputeTextureParam(_shadowConstructComputeShader, csMainKernel, "gWorldPositionTexture", resultWorldPositionRenderTexture);
                 commandBuffer.SetComputeTextureParam(_shadowConstructComputeShader, csMainKernel, "resultShadowTexture", resultShadowRenderTexture);
@@ -174,18 +191,19 @@ public class WorldConstructPass : ScriptableRenderPass {
                 commandBuffer.SetComputeMatrixParam(_shadowConstructComputeShader, "worldToObject", worldToobject);
                 commandBuffer.SetComputeMatrixParam(_shadowConstructComputeShader, "objectToWorld", objectToWorld);
 
-                commandBuffer.SetComputeVectorParam(_shadowConstructComputeShader, "objectCenterXYZRadiusW", objectCenterXYZRadiusW);
+                commandBuffer.SetComputeVectorParam(_shadowConstructComputeShader, "objectCenter", objectCenter);
+                commandBuffer.SetComputeVectorParam(_shadowConstructComputeShader, "objectBound", objectBound / 2);
 
                 commandBuffer.SetComputeVectorParam(_shadowConstructComputeShader, "localLightDirection", localLightDirection);
-                commandBuffer.SetComputeVectorParam(_shadowConstructComputeShader, "globalLightDirection", globalLightDirection);                commandBuffer.SetComputeVectorParam(_shadowConstructComputeShader, "localLightDirection", localLightDirection);
+                commandBuffer.SetComputeVectorParam(_shadowConstructComputeShader, "globalLightDirection", globalLightDirection);          
 
                 commandBuffer.SetComputeBufferParam(_shadowConstructComputeShader, csMainKernel, "debugBuffer", debugBuffer);
 
                 commandBuffer.DispatchCompute(
                     _shadowConstructComputeShader,
                     csMainKernel,
-                    Mathf.CeilToInt(width * 1.0f / numThreadsX),
-                    Mathf.CeilToInt(height * 1.0f / numThreadsY),
+                    Mathf.CeilToInt(width * 1.0f / mainThreadnumThreadsX),
+                    Mathf.CeilToInt(height * 1.0f / mainThreadnumThreadsY),
                     1
                 );
 

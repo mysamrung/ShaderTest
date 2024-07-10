@@ -674,7 +674,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e568b8d9b3f900f438d8a1db7603379a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  shadowCastMeshFilter: {fileID: 503655594}
+  shadowCastMeshFilter: {fileID: 1726048622}
   shadowReceivePoint: {fileID: 858474134}
   lightDirection: {x: 0, y: -1, z: 0}
   localPoint: {x: 0, y: 0, z: 0}
@@ -682,6 +682,7 @@ MonoBehaviour:
   dotOut: 0
   debugGPU: 0
   calculate: 0
+  justPoint: 0
   hideSnapSphere: 0
   pointSize: 0.01
   vertices: []
@@ -1209,7 +1210,7 @@ MeshFilter:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1726048620}
-  m_Mesh: {fileID: 10210, guid: 0000000000000000e000000000000000, type: 0}
+  m_Mesh: {fileID: 10207, guid: 0000000000000000e000000000000000, type: 0}
 --- !u!4 &1726048623
 Transform:
   m_ObjectHideFlags: 0

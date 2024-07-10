@@ -1,6 +1,8 @@
 // Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel CSMain
-#define CLOSEVALUE -0.001
+#pragma kernel CSPrepareMain
+
+#define CLOSEVALUE -0.1
 
 // Create a RenderTexture with enableRandomWrite flag and set it
 // with cs.SetTexture
@@ -21,12 +23,32 @@ float2 modelTextureSize;
 float4x4 worldToObject;
 float4x4 objecToWorld;
 
-float4 objectCenterXYZRadiusW;
+float3 objectCenter;
+float3 objectBound;
 
 float3 localLightDirection;
 float3 globalLightDirection;
 
 //RWStructuredBuffer<float4> debugBuffer;
+
+struct MeshTriangleProperty {
+    float3 normalRaw; 
+    float normalArea;
+    float3 normal;
+    float normalLength;
+
+    float3 pointA;
+    float triangleCALength2;
+    
+    float3 pointB;
+    float ln;
+
+    float3 pointC;
+    int isIgnore; // 1 : ignore 
+};
+
+RWStructuredBuffer<MeshTriangleProperty> meshTriangleBuffer;
+AppendStructuredBuffer<uint> triangleIndexListBuffer;
 
 void LoadVertexData(uint index, out float3 position, out float2 uv) {
     uint pi = index * vertexStride; // index * (3[position.xyz] + 2[uv.xy]) * 4[bytes]
@@ -74,20 +96,21 @@ void CSMain (uint3 id : SV_DispatchThreadID) {
     resultShadowTexture[id.xy] = 0;
     
     float3 worldPosition = (gWorldPositionTexture[id.xy]).xyz;
-    float3 pixelToCenter = worldPosition - objectCenterXYZRadiusW.xyz;
+    float3 pixelToCenter = worldPosition - objectCenter.xyz;
     
     float distanceToClosestPointObject = dot(pixelToCenter, globalLightDirection);
     float3 closetPointsToObject = worldPosition - (globalLightDirection * distanceToClosestPointObject);
-    
-    float3 closetPointToCenter = closetPointsToObject - objectCenterXYZRadiusW.xyz;
-    
-    if (dot(closetPointToCenter, closetPointToCenter) > objectCenterXYZRadiusW.w)
+    float3 closetPointToCenter = closetPointsToObject - objectCenter;
+
+    if(abs(closetPointToCenter.x) > objectBound.x || abs(closetPointToCenter.y) > objectBound.y || abs(closetPointToCenter.z) > objectBound.z)
         return;
     
+    resultShadowTexture[id.xy] = 0.2;
     
     float3 localPosition = mul(worldToObject, float4(worldPosition, 1)).xyz;
     
     for (int i = 0; i < indexCount; i += 3) {
+        continue;
         // Load index data
         uint3 triIndex = loadTriangleIndices(i); // id * 3[triangle vertices] * 4[bytes]
         
@@ -109,6 +132,7 @@ void CSMain (uint3 id : SV_DispatchThreadID) {
         if (dotNLocalLight < 0)
             continue;
         
+
         float area = dot(normalRaw, normalRaw);
         float normalLenght = sqrt(area);
         float3 normal = normalRaw / normalLenght;
@@ -121,11 +145,12 @@ void CSMain (uint3 id : SV_DispatchThreadID) {
         // or too close to receiver's point (consider as same point)
         // then ignore
         float dotVN = dot(vec, normal);
-        float t = (dotVN) / (dotNLocalLight / normalLenght);
+        float ln = (dotNLocalLight / normalLenght);
+        float t = (dotVN) / ln;
         //float t = (dotVN) / dot(-localLightDirection, normal);
         if (t > CLOSEVALUE)
             continue;
-        
+
          // progject receiver's point(pixel) to caster's surface
         float3 snapLocalPosition = localPosition + (localLightDirection * t);
 
@@ -136,7 +161,7 @@ void CSMain (uint3 id : SV_DispatchThreadID) {
         
         if (dot(snapLocalPositionToCenter, snapLocalPositionToCenter) > dot(triangleCA, triangleCA))
             continue;
-        
+            
         //use Barycentric Coordinates to determine is point inside trinagle
         float3 na = cross(BAVec, snapLocalPosition - pointA);
         float alpha = dot(na, normalRaw) / area;
@@ -153,5 +178,56 @@ void CSMain (uint3 id : SV_DispatchThreadID) {
             continue;
         
         resultShadowTexture[id.xy] = 1;
+        return;
     }
+}
+
+
+[numthreads(8,1,1)]
+void CSPrepareMain (uint3 id : SV_DispatchThreadID) {
+    if(id.x >= indexCount)
+        return;
+
+    // Load index data
+    uint3 triIndex = loadTriangleIndices(id.x); // id * 3[triangle vertices] * 4[bytes]
+
+    // Load vertex data
+    float3 pointA, pointB, pointC;
+    float2 uvA, uvB, uvC;
+
+    LoadVertexData(triIndex.x, pointA, uvA);
+    LoadVertexData(triIndex.y, pointB, uvB);
+    LoadVertexData(triIndex.z, pointC, uvC);
+
+    float3 BAVec = pointB - pointA;
+    float3 CAVec = pointC - pointA;
+        
+    float3 normalRaw = cross(BAVec, CAVec);
+        
+    // if caster's surface is align to light direction then ignore
+    float dotNLocalLight = dot(-localLightDirection, normalRaw);
+    if (dotNLocalLight < 0)
+        return;
+
+    float area = dot(normalRaw, normalRaw);
+    float normalLength = sqrt(area);
+    float3 normal = normalRaw / normalLength;
+    float ln = (dotNLocalLight / normalLength);
+    
+    float3 center = (pointA + pointB + pointC) / 3;
+    float3 triangleCA = center - pointA;
+
+    meshTriangleBuffer[id.x].normalRaw = normalRaw;
+    meshTriangleBuffer[id.x].normal = normal;
+    meshTriangleBuffer[id.x].normalLength = normalLength;
+    meshTriangleBuffer[id.x].normalArea = area;
+
+    meshTriangleBuffer[id.x].pointA = pointA;
+    meshTriangleBuffer[id.x].pointB = pointB;
+    meshTriangleBuffer[id.x].pointC = pointC;
+
+    meshTriangleBuffer[id.x].triangleCALength2 = dot(triangleCA, triangleCA);
+    meshTriangleBuffer[id.x].ln = ln;
+
+    triangleIndexListBuffer.Append(id.x); 
 }

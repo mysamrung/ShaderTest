@@ -79,6 +79,11 @@ public class GBufferDebugCPU : MonoBehaviour {
                 }
             }
         }
+
+        MeshRenderer meshRenderer = shadowCastMeshFilter.GetComponent<MeshRenderer>();
+
+        Vector3 objectCenter = shadowCastMeshFilter.transform.TransformPoint(meshRenderer.bounds.center);
+       Gizmos.DrawWireCube(meshRenderer.bounds.center, meshRenderer.bounds.size);
     }
 
     public IEnumerator CalculateShadow() { 
