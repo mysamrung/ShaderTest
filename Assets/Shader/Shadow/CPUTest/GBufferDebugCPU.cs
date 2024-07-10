@@ -86,6 +86,7 @@ public class GBufferDebugCPU : MonoBehaviour {
         snapPos.Clear();
 
         MeshFilter meshFilter = shadowReceivePoint.GetComponent<MeshFilter>();
+        MeshRenderer meshRenderer = shadowCastMeshFilter.GetComponent<MeshRenderer>();
         Vector3[] vertices = null;
         if (justPoint)
             vertices = new Vector3[1] { Vector3.zero };
@@ -104,8 +105,21 @@ public class GBufferDebugCPU : MonoBehaviour {
         }
         sphereDebugs.Clear();
 
+        int stepACount = 0;
+
+        float objectBoundRadius = Mathf.Max(meshRenderer.bounds.size.x, meshRenderer.bounds.center.y, meshRenderer.bounds.center.z);
+
         foreach (Vector3 point in vertices) {
             Vector3 worldPosition = shadowReceivePoint.transform.TransformPoint(point);
+
+            Vector3 pixelToCenter = worldPosition - meshRenderer.bounds.center;
+
+            float distanceToClosestPointObject = Vector3.Dot(pixelToCenter, lightDirection);
+            Vector3 closetPointsToObject = worldPosition - (lightDirection * distanceToClosestPointObject);
+
+            if (Vector3.Distance(closetPointsToObject, meshRenderer.bounds.center) > objectBoundRadius)
+                continue;
+
             Vector3 localPosition = shadowCastMeshFilter.transform.InverseTransformPoint(worldPosition);
             //localPosition = localPoint;
 
@@ -154,10 +168,21 @@ public class GBufferDebugCPU : MonoBehaviour {
                 if (t > closeOut)
                     continue;
 
+
                 // progject receiver's point(pixel) to caster's surface
                 Vector3 snapLocalPosition = localPosition + (localLightDirection * (t));
                 snapPos.Add(shadowCastMeshFilter.transform.TransformPoint(snapLocalPosition));
 
+
+                Vector3 center = (pointA + pointB + pointC) / 3;
+                Vector3 triangleCA = center - pointA;
+
+                Vector3 snapLocalPToCenter = snapLocalPosition - center;
+
+                if (Vector3.Dot(snapLocalPToCenter, snapLocalPToCenter) > Vector3.Dot(triangleCA, triangleCA))
+                    continue;
+
+                stepACount++;
                 //Gizmos.DrawRay(shadowCastMeshFilter.transform.position, normal);
                 //Gizmos.DrawWireSphere(shadowCastMeshFilter.transform.TransformPoint(localPosition), 0.05f);
 
@@ -174,7 +199,7 @@ public class GBufferDebugCPU : MonoBehaviour {
                 //// if projected point is out side surface then ignore
                 //if (d_ab <= closeOut || d_bc <= closeOut)
                 //    continue;
-                
+
 
                 Vector3 na = Vector3.Cross(BAVec, snapLocalPosition - pointA);
                 float alpha = Vector3.Dot(na, normalRaw) / area;
@@ -210,6 +235,7 @@ public class GBufferDebugCPU : MonoBehaviour {
             }
         }
 
+        Debug.Log("StepACount" + stepACount);
         Debug.Log("S_LP" + lPoints);
     }
 

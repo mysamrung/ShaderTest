@@ -7,6 +7,8 @@
 RWTexture2D<float4> gWorldPositionTexture;
 RWTexture2D<float> resultShadowTexture;
 
+float2 screenSize;
+
 ByteAddressBuffer modelVertices;
 ByteAddressBuffer modelIndices;
 
@@ -19,9 +21,12 @@ float2 modelTextureSize;
 float4x4 worldToObject;
 float4x4 objecToWorld;
 
-float3 localLightDirection;
+float4 objectCenterXYZRadiusW;
 
-RWStructuredBuffer<float4> debugBuffer;
+float3 localLightDirection;
+float3 globalLightDirection;
+
+//RWStructuredBuffer<float4> debugBuffer;
 
 void LoadVertexData(uint index, out float3 position, out float2 uv) {
     uint pi = index * vertexStride; // index * (3[position.xyz] + 2[uv.xy]) * 4[bytes]
@@ -63,10 +68,25 @@ uint3 loadTriangleIndices(uint nTriangle)
 
 [numthreads(8,8,1)]
 void CSMain (uint3 id : SV_DispatchThreadID) {
+    if(id.x >= screenSize.x || id.y >= screenSize.y)
+        return;
+    
+    resultShadowTexture[id.xy] = 0;
+    
     float3 worldPosition = (gWorldPositionTexture[id.xy]).xyz;
+    float3 pixelToCenter = worldPosition - objectCenterXYZRadiusW.xyz;
+    
+    float distanceToClosestPointObject = dot(pixelToCenter, globalLightDirection);
+    float3 closetPointsToObject = worldPosition - (globalLightDirection * distanceToClosestPointObject);
+    
+    float3 closetPointToCenter = closetPointsToObject - objectCenterXYZRadiusW.xyz;
+    
+    if (dot(closetPointToCenter, closetPointToCenter) > objectCenterXYZRadiusW.w)
+        return;
+    
+    
     float3 localPosition = mul(worldToObject, float4(worldPosition, 1)).xyz;
     
-    resultShadowTexture[id.xy] =  0;
     for (int i = 0; i < indexCount; i += 3) {
         // Load index data
         uint3 triIndex = loadTriangleIndices(i); // id * 3[triangle vertices] * 4[bytes]
@@ -85,14 +105,15 @@ void CSMain (uint3 id : SV_DispatchThreadID) {
         float3 normalRaw = cross(BAVec, CAVec);
         
         // if caster's surface is align to light direction then ignore
-        float dotNLocalLight = dot(localLightDirection, normalRaw);
-        if (dotNLocalLight > 0)
+        float dotNLocalLight = dot(-localLightDirection, normalRaw);
+        if (dotNLocalLight < 0)
             continue;
         
         float area = dot(normalRaw, normalRaw);
-        float3 normal = normalRaw / sqrt(area);
+        float normalLenght = sqrt(area);
+        float3 normal = normalRaw / normalLenght;
         
-        float planeD = normal.x * pointA.x - normal.y * pointA.y - normal.z * pointA.z;
+        //float planeD = normal.x * pointA.x - normal.y * pointA.y - normal.z * pointA.z;
         
         float3 vec = localPosition - pointA;
         
@@ -100,13 +121,23 @@ void CSMain (uint3 id : SV_DispatchThreadID) {
         // or too close to receiver's point (consider as same point)
         // then ignore
         float dotVN = dot(vec, normal);
-        float t = (dotVN) / dot(-localLightDirection, normal);
+        float t = (dotVN) / (dotNLocalLight / normalLenght);
+        //float t = (dotVN) / dot(-localLightDirection, normal);
         if (t > CLOSEVALUE)
             continue;
         
          // progject receiver's point(pixel) to caster's surface
         float3 snapLocalPosition = localPosition + (localLightDirection * t);
 
+        float3 center = (pointA + pointB + pointC) / 3;
+        float3 triangleCA = center - pointA;
+        
+        float3 snapLocalPositionToCenter = snapLocalPosition - center;
+        
+        if (dot(snapLocalPositionToCenter, snapLocalPositionToCenter) > dot(triangleCA, triangleCA))
+            continue;
+        
+        //use Barycentric Coordinates to determine is point inside trinagle
         float3 na = cross(BAVec, snapLocalPosition - pointA);
         float alpha = dot(na, normalRaw) / area;
         if(alpha < 0 || alpha > 1)
@@ -122,18 +153,5 @@ void CSMain (uint3 id : SV_DispatchThreadID) {
             continue;
         
         resultShadowTexture[id.xy] = 1;
-        //// find uv at projected point on surface
-        //float un = length(cross(pointA - pointB, pointA - pointC));
-        //float ua = length(cross(pointB - snapLocalPosition, pointC - snapLocalPosition)) / un;
-        //float ub = length(cross(pointC - snapLocalPosition, pointA - snapLocalPosition)) / un;
-        //float uc = length(cross(pointA - snapLocalPosition, pointB - snapLocalPosition)) / un;
-
-        //float2 uv = uvA * ua + uvB * ub + uvC * uc;
-        //float alpha = modelTexture[round(uv * modelTextureSize)].w;
-
-        //if(alpha < 1)
-        //    return;
-
-        return;
     }
 }

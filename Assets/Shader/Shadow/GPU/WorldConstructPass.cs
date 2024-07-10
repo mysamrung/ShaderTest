@@ -121,7 +121,7 @@ public class WorldConstructPass : ScriptableRenderPass {
                 Mesh mesh = meshFilter.sharedMesh;
 
                 mesh.vertexBufferTarget |= GraphicsBuffer.Target.Raw;
-                mesh.indexBufferTarget |= GraphicsBuffer.Target.Raw |GraphicsBuffer.Target.Index;
+                mesh.indexBufferTarget |= GraphicsBuffer.Target.Raw | GraphicsBuffer.Target.Index;
 
                 GraphicsBuffer vertexBuffer = mesh.GetVertexBuffer(0);
                 GraphicsBuffer indexBuffer = mesh.GetIndexBuffer();
@@ -132,13 +132,23 @@ public class WorldConstructPass : ScriptableRenderPass {
                 if(modelTexture == null)
                     modelTexture = Texture2D.whiteTexture; 
 
+                Vector2 screenSize = new Vector2(width, height);
                 Vector2 modelTextureSize = modelTexture.texelSize;
 
                 Matrix4x4 worldToobject = shadowCaster.transform.worldToLocalMatrix;
                 Matrix4x4 objectToWorld = shadowCaster.transform.localToWorldMatrix;
 
-                Vector3 localLightDirection = shadowCaster.transform.InverseTransformDirection(directionalLights[0].transform.forward).normalized;
+                Vector3 globalLightDirection = directionalLights[0].transform.forward;
+                Vector3 localLightDirection = shadowCaster.transform.InverseTransformDirection(globalLightDirection).normalized;
                 localLightDirection.Normalize();
+
+                float objectBoundSize = Mathf.Max(meshRenderer.bounds.size.x, meshRenderer.bounds.center.y, meshRenderer.bounds.center.z);
+                Vector4 objectCenterXYZRadiusW = new Vector4(
+                    meshRenderer.bounds.center.x,
+                    meshRenderer.bounds.center.y,
+                    meshRenderer.bounds.center.z,
+                    objectBoundSize * objectBoundSize
+                ); ;
 
                 int csMainKernel = _shadowConstructComputeShader.FindKernel("CSMain");
                 _shadowConstructComputeShader.GetKernelThreadGroupSizes(
@@ -150,15 +160,24 @@ public class WorldConstructPass : ScriptableRenderPass {
 
                 commandBuffer.SetComputeTextureParam(_shadowConstructComputeShader, csMainKernel, "gWorldPositionTexture", resultWorldPositionRenderTexture);
                 commandBuffer.SetComputeTextureParam(_shadowConstructComputeShader, csMainKernel, "resultShadowTexture", resultShadowRenderTexture);
+                commandBuffer.SetComputeVectorParam(_shadowConstructComputeShader, "screenSize", screenSize);
+              
                 commandBuffer.SetComputeBufferParam(_shadowConstructComputeShader, csMainKernel, "modelVertices", vertexBuffer);
                 commandBuffer.SetComputeBufferParam(_shadowConstructComputeShader, csMainKernel, "modelIndices", indexBuffer);
+             
                 commandBuffer.SetComputeIntParam(_shadowConstructComputeShader, "vertexStride", vertexBuffer.stride);
                 commandBuffer.SetComputeIntParam(_shadowConstructComputeShader, "indexCount", indexCount);
+              
                 commandBuffer.SetComputeTextureParam(_shadowConstructComputeShader, csMainKernel, "modelTexture", modelTexture);
                 commandBuffer.SetComputeVectorParam(_shadowConstructComputeShader, "modelTextureSize", modelTextureSize);
+              
                 commandBuffer.SetComputeMatrixParam(_shadowConstructComputeShader, "worldToObject", worldToobject);
                 commandBuffer.SetComputeMatrixParam(_shadowConstructComputeShader, "objectToWorld", objectToWorld);
+
+                commandBuffer.SetComputeVectorParam(_shadowConstructComputeShader, "objectCenterXYZRadiusW", objectCenterXYZRadiusW);
+
                 commandBuffer.SetComputeVectorParam(_shadowConstructComputeShader, "localLightDirection", localLightDirection);
+                commandBuffer.SetComputeVectorParam(_shadowConstructComputeShader, "globalLightDirection", globalLightDirection);                commandBuffer.SetComputeVectorParam(_shadowConstructComputeShader, "localLightDirection", localLightDirection);
 
                 commandBuffer.SetComputeBufferParam(_shadowConstructComputeShader, csMainKernel, "debugBuffer", debugBuffer);
 
