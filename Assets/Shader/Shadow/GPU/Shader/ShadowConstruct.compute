@@ -110,7 +110,6 @@ void CSMain (uint3 id : SV_DispatchThreadID) {
     float3 localPosition = mul(worldToObject, float4(worldPosition, 1)).xyz;
     
     for (int i = 0; i < indexCount; i += 3) {
-        continue;
         // Load index data
         uint3 triIndex = loadTriangleIndices(i); // id * 3[triangle vertices] * 4[bytes]
         
