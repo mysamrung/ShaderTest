@@ -2,7 +2,7 @@
 #pragma kernel CSMain
 #pragma kernel CSPrepareMain
 
-#define CLOSEVALUE -0.1
+#define CLOSEVALUE -0.01
 
 // Create a RenderTexture with enableRandomWrite flag and set it
 // with cs.SetTexture
@@ -48,7 +48,6 @@ struct MeshTriangleProperty {
 };
 
 RWStructuredBuffer<MeshTriangleProperty> meshTriangleBuffer;
-AppendStructuredBuffer<uint> triangleIndexListBuffer;
 
 void LoadVertexData(uint index, out float3 position, out float2 uv) {
     uint pi = index * vertexStride; // index * (3[position.xyz] + 2[uv.xy]) * 4[bytes]
@@ -90,6 +89,83 @@ uint3 loadTriangleIndices(uint nTriangle)
 
 [numthreads(8,8,1)]
 void CSMain (uint3 id : SV_DispatchThreadID) {
+    if(id.x >= screenSize.x || id.y >= screenSize.y)
+        return;
+    
+    resultShadowTexture[id.xy] = 0;
+    
+    float3 worldPosition = (gWorldPositionTexture[id.xy]).xyz;
+    float3 pixelToCenter = worldPosition - objectCenter.xyz;
+    
+    float distanceToClosestPointObject = dot(pixelToCenter, globalLightDirection);
+    float3 closetPointsToObject = worldPosition - (globalLightDirection * distanceToClosestPointObject);
+    float3 closetPointToCenter = closetPointsToObject - objectCenter;
+
+    if(abs(closetPointToCenter.x) > objectBound.x || abs(closetPointToCenter.y) > objectBound.y || abs(closetPointToCenter.z) > objectBound.z)
+        return;
+    
+    
+    float3 localPosition = mul(worldToObject, float4(worldPosition, 1)).xyz;
+    
+
+   for (int i = 0; i < indexCount; i++) {
+       if(meshTriangleBuffer[i].isIgnore == 1)
+           continue;
+           
+       // Load vertex data
+       float3 pointA = meshTriangleBuffer[i].pointA;
+       float3 pointB = meshTriangleBuffer[i].pointB;
+       float3 pointC = meshTriangleBuffer[i].pointC;
+     
+       float3 vec = localPosition - pointA;
+       
+       // if direction to closest point is opposite to received's surface normal 
+       // or too close to receiver's point (consider as same point)
+       // then ignore
+       float dotVN = dot(vec, meshTriangleBuffer[i].normal);
+       float ln = meshTriangleBuffer[i].ln;
+       float t = (dotVN) / ln;
+       //float t = (dotVN) / dot(-localLightDirection, normal);
+       if (t > CLOSEVALUE)
+           continue;
+
+       // progject receiver's point(pixel) to caster's surface
+        float3 snapLocalPosition = localPosition + (localLightDirection * t);
+
+        //float3 center = (pointA + pointB + pointC) / 3;
+        //float3 snapLocalPositionToCenter = snapLocalPosition - center;
+       
+        //if (dot(snapLocalPositionToCenter, snapLocalPositionToCenter) > rmeshTriangleBuffer[i].triangleCALength2)
+        //    continue;
+           
+        float3 BAVec = pointB - pointA;
+        float3 CAVec = pointC - pointA;
+       
+        float3 normalRaw = meshTriangleBuffer[i].normalRaw;
+        float area = meshTriangleBuffer[i].normalArea;
+
+        //use Barycentric Coordinates to determine is point inside trinagle
+        float3 na = cross(BAVec, snapLocalPosition - pointA);
+        float alpha = dot(na, normalRaw) / area;
+        if(alpha < 0 || alpha > 1)
+            continue;
+       
+        float3 nb = cross(snapLocalPosition - pointA, CAVec);
+        float beta = dot(nb, normalRaw) / area;
+        if (beta < 0 || beta > 1)
+            continue;
+       
+        float gamma = 1 - alpha - beta;
+        if (gamma < 0 || gamma > 1)
+            continue;
+       
+        resultShadowTexture[id.xy] = 1;
+        return;
+   }
+}
+
+[numthreads(8,8,1)]
+void CSMain2 (uint3 id : SV_DispatchThreadID) {
     if(id.x >= screenSize.x || id.y >= screenSize.y)
         return;
     
@@ -150,17 +226,17 @@ void CSMain (uint3 id : SV_DispatchThreadID) {
         if (t > CLOSEVALUE)
             continue;
 
-         // progject receiver's point(pixel) to caster's surface
-        float3 snapLocalPosition = localPosition + (localLightDirection * t);
+        // progject receiver's point(pixel) to caster's surface
+       float3 snapLocalPosition = localPosition + (localLightDirection * t);
 
         float3 center = (pointA + pointB + pointC) / 3;
         float3 triangleCA = center - pointA;
         
         float3 snapLocalPositionToCenter = snapLocalPosition - center;
         
-        if (dot(snapLocalPositionToCenter, snapLocalPositionToCenter) > dot(triangleCA, triangleCA))
+        if (dot(snapLocalPositionToCenter, snapLocalPositionToCenter) > dot(triangleCA, triangleCA) + 0.5)
             continue;
-            
+
         //use Barycentric Coordinates to determine is point inside trinagle
         float3 na = cross(BAVec, snapLocalPosition - pointA);
         float alpha = dot(na, normalRaw) / area;
@@ -186,9 +262,11 @@ void CSMain (uint3 id : SV_DispatchThreadID) {
 void CSPrepareMain (uint3 id : SV_DispatchThreadID) {
     if(id.x >= indexCount)
         return;
+    
+    meshTriangleBuffer[id.x].isIgnore = 1;
 
     // Load index data
-    uint3 triIndex = loadTriangleIndices(id.x); // id * 3[triangle vertices] * 4[bytes]
+    uint3 triIndex = loadTriangleIndices(id.x * 3); // id * 3[triangle vertices] * 4[bytes]
 
     // Load vertex data
     float3 pointA, pointB, pointC;
@@ -220,13 +298,12 @@ void CSPrepareMain (uint3 id : SV_DispatchThreadID) {
     meshTriangleBuffer[id.x].normal = normal;
     meshTriangleBuffer[id.x].normalLength = normalLength;
     meshTriangleBuffer[id.x].normalArea = area;
-
+    
     meshTriangleBuffer[id.x].pointA = pointA;
     meshTriangleBuffer[id.x].pointB = pointB;
     meshTriangleBuffer[id.x].pointC = pointC;
-
+    
     meshTriangleBuffer[id.x].triangleCALength2 = dot(triangleCA, triangleCA);
     meshTriangleBuffer[id.x].ln = ln;
-
-    triangleIndexListBuffer.Append(id.x); 
+    meshTriangleBuffer[id.x].isIgnore = 0;
 }
