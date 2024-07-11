@@ -132,32 +132,34 @@ void CSMain (uint3 id : SV_DispatchThreadID) {
        // progject receiver's point(pixel) to caster's surface
         float3 snapLocalPosition = localPosition + (localLightDirection * t);
 
-        //float3 center = (pointA + pointB + pointC) / 3;
-        //float3 snapLocalPositionToCenter = snapLocalPosition - center;
+        float3 center = (pointA + pointB + pointC) / 3;
+        float3 snapLocalPositionToCenter = snapLocalPosition - center;
        
-        //if (dot(snapLocalPositionToCenter, snapLocalPositionToCenter) > rmeshTriangleBuffer[i].triangleCALength2)
-        //    continue;
+        if (dot(snapLocalPositionToCenter, snapLocalPositionToCenter) > meshTriangleBuffer[i].triangleCALength2)
+            continue;
            
-        float3 BAVec = pointB - pointA;
-        float3 CAVec = pointC - pointA;
+        resultShadowTexture[id.xy] = i * 1.0 / indexCount;
+        return;
+        //float3 BAVec = pointB - pointA;
+        //float3 CAVec = pointC - pointA;
        
-        float3 normalRaw = meshTriangleBuffer[i].normalRaw;
-        float area = meshTriangleBuffer[i].normalArea;
+        //float3 normalRaw = meshTriangleBuffer[i].normalRaw;
+        //float area = meshTriangleBuffer[i].normalArea;
 
-        //use Barycentric Coordinates to determine is point inside trinagle
-        float3 na = cross(BAVec, snapLocalPosition - pointA);
-        float alpha = dot(na, normalRaw) / area;
-        if(alpha < 0 || alpha > 1)
-            continue;
+        ////use Barycentric Coordinates to determine is point inside trinagle
+        //float3 na = cross(BAVec, snapLocalPosition - pointA);
+        //float alpha = dot(na, normalRaw) / area;
+        //if(alpha < 0 || alpha > 1)
+        //    continue;
        
-        float3 nb = cross(snapLocalPosition - pointA, CAVec);
-        float beta = dot(nb, normalRaw) / area;
-        if (beta < 0 || beta > 1)
-            continue;
+        //float3 nb = cross(snapLocalPosition - pointA, CAVec);
+        //float beta = dot(nb, normalRaw) / area;
+        //if (beta < 0 || beta > 1)
+        //    continue;
        
-        float gamma = 1 - alpha - beta;
-        if (gamma < 0 || gamma > 1)
-            continue;
+        //float gamma = 1 - alpha - beta;
+        //if (gamma < 0 || gamma > 1)
+        //    continue;
        
         resultShadowTexture[id.xy] = 1;
         return;
