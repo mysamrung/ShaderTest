@@ -14,6 +14,7 @@ public class GBufferDebugCPU : MonoBehaviour {
 
     public float closeOut = 0.0000001f;
     public float dotOut = -0.001f;
+    public float dotOut2 = -0.001f;
 
     public bool debugGPU;
     public bool calculate;
@@ -22,18 +23,23 @@ public class GBufferDebugCPU : MonoBehaviour {
     public bool hideSnapSphere;
 
     [Range(0.0f, 1.0f)]
-    public float pointSize = 0.01f; 
+    public float pointSize = 0.01f;
 
     [SerializeField]
     private Vector3[] vertices;
 
     private List<Vector3> shadowVertices = new List<Vector3>();
     private List<Vector3> snapPos = new List<Vector3>();
+    private List<Vector3> snapPos2 = new List<Vector3>();
 
     [SerializeField]
     private SphereDebugCPU sphereDebugCPU;
 
     private List<SphereDebugCPU> sphereDebugs = new List<SphereDebugCPU>();
+
+    private Vector3 rePoint;
+    [SerializeField]
+    private int triIndex = -1;
 
     public void Start() {
         //vertices = shadowCastMeshFilter.mesh.vertices;
@@ -44,9 +50,8 @@ public class GBufferDebugCPU : MonoBehaviour {
     }
 
     public void Update() {
-        if (calculate)
-        {
-            if(debugGPU) { 
+        if (calculate) {
+            if (debugGPU) {
                 WorldConstructPass.readBuffer = true;
                 StartCoroutine(CalculateScreenShadow());
             } else {
@@ -55,9 +60,25 @@ public class GBufferDebugCPU : MonoBehaviour {
             calculate = false;
         }
 
-        if (Input.GetMouseButtonUp(0)) {
-            foreach (Vector3 point in shadowVertices) {
-            }
+        if (Input.GetMouseButtonUp(0) || (Input.GetMouseButton(0) && Input.GetKey(KeyCode.LeftShift))) {
+            Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+            if (!Physics.Raycast(ray, out RaycastHit hit))
+                return;
+
+
+            CalculateShadowPoint(hit.point);
+            rePoint = hit.point;
+        }
+
+        if (Input.GetMouseButtonUp(1)) {
+            CalculateShadowPoint(rePoint);
+        }
+
+        if(Input.GetKey(KeyCode.R)) {
+            shadowVertices.Clear();
+            snapPos.Clear();
+            snapPos2.Clear();
+
         }
     }
 
@@ -71,20 +92,113 @@ public class GBufferDebugCPU : MonoBehaviour {
                 Gizmos.DrawSphere(point, pointSize);
             }
 
-            if(!hideSnapSphere) { 
+            if(!hideSnapSphere) {
+                Gizmos.color = Color.green;
+                foreach (Vector3 point in snapPos2) {
+                    Gizmos.DrawSphere(point, pointSize / 2);
+                }
                 Gizmos.color = Color.white;
                 foreach (Vector3 point in snapPos)
                 {
-                    Gizmos.DrawSphere(point, pointSize / 2);
+                    Gizmos.DrawSphere(point, pointSize / 3);
                 }
             }
         }
 
+        if (triIndex != -1) {
+            for (int i = triIndex == -1 ? 0 : triIndex; i < (triIndex == -1 ? shadowCastMeshFilter.mesh.triangles.Length : triIndex + 2); i += 3) {
+                int indexA = shadowCastMeshFilter.mesh.triangles[i + 0];
+                int indexB = shadowCastMeshFilter.mesh.triangles[i + 1];
+                int indexC = shadowCastMeshFilter.mesh.triangles[i + 2];
+
+
+                Vector3 pointA = shadowCastMeshFilter.transform.TransformPoint(shadowCastMeshFilter.mesh.vertices[indexA]);
+                Vector3 pointB = shadowCastMeshFilter.transform.TransformPoint(shadowCastMeshFilter.mesh.vertices[indexB]);
+                Vector3 pointC = shadowCastMeshFilter.transform.TransformPoint(shadowCastMeshFilter.mesh.vertices[indexC]);
+
+                Gizmos.color = Color.red;
+                Gizmos.DrawLine(pointA, pointB);
+                Gizmos.DrawLine(pointB, pointC);
+                Gizmos.DrawLine(pointC, pointA);
+
+                Gizmos.color = Color.white;
+            }
+        }
+
         MeshRenderer meshRenderer = shadowCastMeshFilter.GetComponent<MeshRenderer>();
+        MeshFilter meshFilter = shadowCastMeshFilter.GetComponent<MeshFilter>();
 
         Vector3 objectCenter = shadowCastMeshFilter.transform.TransformPoint(meshRenderer.bounds.center);
-       Gizmos.DrawWireCube(meshRenderer.bounds.center, meshRenderer.bounds.size);
+        Gizmos.DrawWireCube(meshRenderer.bounds.center, meshRenderer.bounds.size);
+       
     }
+
+    public void CalculateShadowPoint(Vector3 point) {
+       
+            snapPos.Add(point);
+            
+            for (int i = triIndex == -1 ? 0 : triIndex; i < (triIndex == -1 ? shadowCastMeshFilter.mesh.triangles.Length : triIndex + 2); i += 3) {
+                int indexA = shadowCastMeshFilter.mesh.triangles[i + 0];
+                int indexB = shadowCastMeshFilter.mesh.triangles[i + 1];
+                int indexC = shadowCastMeshFilter.mesh.triangles[i + 2];
+
+                Vector3 pointA = shadowCastMeshFilter.transform.TransformPoint(shadowCastMeshFilter.mesh.vertices[indexA]);
+                Vector3 pointB = shadowCastMeshFilter.transform.TransformPoint(shadowCastMeshFilter.mesh.vertices[indexB]);
+                Vector3 pointC = shadowCastMeshFilter.transform.TransformPoint(shadowCastMeshFilter.mesh.vertices[indexC]);
+
+                //Vector3[] points = new Vector3[] { pointA, pointB, pointC };
+
+                //Gizmos.DrawLineStrip(points, true);
+
+                Vector3 BAVec = pointB - pointA;
+                Vector3 CAVec = pointC - pointA;
+
+                Vector3 normalRaw = Vector3.Cross(BAVec, CAVec);
+
+                float area = Vector3.Dot(normalRaw, normalRaw);
+                Vector3 normal = normalRaw / Mathf.Sqrt(area);
+
+                float planeD = normal.x * pointA.x - normal.y * pointA.y - normal.z * pointA.z;
+
+      
+                Vector3 vec = point - pointA;
+                float dotVN = Vector3.Dot(vec, normal);
+                float dotLN = Vector3.Dot(lightDirection, normal);
+
+                if (dotLN >= dotOut2)
+                    continue;
+                
+                float t = (dotVN) / dotLN;
+                
+
+                // if direction to closest point is opposite to received's surface normal 
+                // or too close to receiver's point (consider as same point)
+                // then ignore
+                if (t < closeOut)
+                    continue;
+
+
+                // progject receiver's point(pixel) to caster's surface
+                Vector3 snapLocalPosition = point - (lightDirection * (t));
+
+                // find uv at projected point on surface
+                Vector3 ua = Vector3.Cross(pointB - snapLocalPosition, pointC - snapLocalPosition);
+                Vector3 ub = Vector3.Cross(pointC - snapLocalPosition, pointA - snapLocalPosition);
+                Vector3 uc = Vector3.Cross(pointA - snapLocalPosition, pointB - snapLocalPosition);
+
+                if (Vector3.Dot(ua, ub) < dotOut)
+                    continue;
+
+                if (Vector3.Dot(ua, uc) < dotOut)
+                    continue;
+
+                snapPos2.Add(snapLocalPosition);
+
+                shadowVertices.Add(point);
+                Debug.Log(i);
+        }
+    }
+
 
     public IEnumerator CalculateShadow() { 
         shadowVertices.Clear();
