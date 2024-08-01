@@ -1,10 +1,7 @@
+using System.Runtime.InteropServices;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
-using static UnityEngine.XR.XRDisplaySubsystem;
-using UnityEngine.UIElements;
-using System.Runtime.InteropServices;
-using UnityEditor.Rendering.Universal.ShaderGUI;
 
 public class WorldConstructPass : ScriptableRenderPass {
     private struct MeshTriangleProperty {
@@ -20,16 +17,17 @@ public class WorldConstructPass : ScriptableRenderPass {
         float ln;
 
         Vector3 pointC;
+        int isIgnore; // 1 : ignore 
     };
 
-    // FrameDebugger‚âProfiler—p‚Ì–¼‘O
+    // FrameDebuggerï¿½ï¿½Profilerï¿½pï¿½Ì–ï¿½ï¿½O
     private const string ProfilerTag = nameof(WorldConstructPass);
     private readonly ProfilingSampler _profilingSampler = new ProfilingSampler(ProfilerTag);
 
-    // ‚Ç‚Ìƒ^ƒCƒ~ƒ“ƒO‚ÅƒŒƒ“ƒ_ƒŠƒ“ƒO‚·‚é‚©
+    // ï¿½Ç‚Ìƒ^ï¿½Cï¿½~ï¿½ï¿½ï¿½Oï¿½Åƒï¿½ï¿½ï¿½ï¿½_ï¿½ï¿½ï¿½ï¿½ï¿½Oï¿½ï¿½ï¿½é‚©
     private readonly RenderPassEvent _renderPassEvent = RenderPassEvent.AfterRenderingTransparents;
 
-    // ‘ÎÛ‚Æ‚·‚éRenderQueue
+    // ï¿½ÎÛ‚Æ‚ï¿½ï¿½ï¿½RenderQueue
     private readonly RenderQueueRange _renderQueueRange = RenderQueueRange.all;
 
     private Material _worldConstructureMaterial;
@@ -60,8 +58,8 @@ public class WorldConstructPass : ScriptableRenderPass {
             resultShadowRenderTexture.Release();
     }
 
-    // ƒŒƒ“ƒ_ƒŠƒ“ƒOˆ—‘O‚ÉŒÄ‚Î‚ê‚é
-    // ƒŒƒ“ƒ_[ƒ^[ƒQƒbƒg‚ğ•Ï‚¦‚½‚è‚Å‚«‚é
+    // ï¿½ï¿½ï¿½ï¿½ï¿½_ï¿½ï¿½ï¿½ï¿½ï¿½Oï¿½ï¿½ï¿½ï¿½ï¿½Oï¿½ÉŒÄ‚Î‚ï¿½ï¿½
+    // ï¿½ï¿½ï¿½ï¿½ï¿½_ï¿½[ï¿½^ï¿½[ï¿½Qï¿½bï¿½gï¿½ï¿½Ï‚ï¿½ï¿½ï¿½ï¿½ï¿½Å‚ï¿½ï¿½ï¿½
     public override void Configure(CommandBuffer cmd, RenderTextureDescriptor cameraTextureDescriptor) {
         if (resultWorldPositionRenderTexture == null) {
             resultWorldPositionRenderTexture = new RenderTexture(
@@ -74,9 +72,9 @@ public class WorldConstructPass : ScriptableRenderPass {
             resultWorldPositionRenderTexture.format = RenderTextureFormat.ARGBFloat;
             resultWorldPositionRenderTexture.enableRandomWrite = true;
             resultWorldPositionRenderTexture.Create();
-        } 
+        }
 
-        if(resultShadowRenderTexture == null) {
+        if (resultShadowRenderTexture == null) {
             resultShadowRenderTexture = new RenderTexture(
                                             cameraTextureDescriptor.width, cameraTextureDescriptor.height,
                                             24,
@@ -92,7 +90,7 @@ public class WorldConstructPass : ScriptableRenderPass {
         if (debugData == null) {
             int bufferCount = cameraTextureDescriptor.width * cameraTextureDescriptor.height;
             debugData = new Vector4[bufferCount];
-            for(int i = 0; i < bufferCount; i++) {
+            for (int i = 0; i < bufferCount; i++) {
                 debugData[i] = Vector4.zero;
             }
             Debug.Log(bufferCount);
@@ -109,7 +107,7 @@ public class WorldConstructPass : ScriptableRenderPass {
         cameraColorTarget = renderer.cameraColorTargetHandle;
     }
 
-    // ƒŒƒ“ƒ_ƒŠƒ“ƒOˆ—‚ğ‘‚­
+    // ï¿½ï¿½ï¿½ï¿½ï¿½_ï¿½ï¿½ï¿½ï¿½ï¿½Oï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData) {
         if (_worldConstructureMaterial == null)
             return;
@@ -117,13 +115,13 @@ public class WorldConstructPass : ScriptableRenderPass {
         CommandBuffer commandBuffer = CommandBufferPool.Get(ProfilerTag);
 
         var cameraData = renderingData.cameraData;
-        // Œ»İ•`‰æ‚µ‚Ä‚¢‚éƒJƒƒ‰‚Ì‰ğ‘œ“x‚ğ@u_downSamplev‚ÅœZ  
+        // ï¿½ï¿½ï¿½İ•`ï¿½æ‚µï¿½Ä‚ï¿½ï¿½ï¿½Jï¿½ï¿½ï¿½ï¿½ï¿½Ì‰ğ‘œ“xï¿½ï¿½ï¿½@ï¿½u_downSampleï¿½vï¿½Åï¿½ï¿½Z  
         int width = cameraData.camera.scaledPixelWidth;
         int height = cameraData.camera.scaledPixelHeight;
 
         Light[] directionalLights = Light.GetLights(LightType.Directional, 0);
 
-     
+
         using (new ProfilingScope(commandBuffer, _profilingSampler)) {
             commandBuffer.SetRenderTarget(resultWorldPositionRenderTexture);
             commandBuffer.DrawMesh(RenderingUtils.fullscreenMesh, Matrix4x4.identity, _worldConstructureMaterial);
@@ -146,8 +144,8 @@ public class WorldConstructPass : ScriptableRenderPass {
                 int indexCount = (int)mesh.GetIndexCount(0);
 
                 Texture modelTexture = meshRenderer.sharedMaterial.mainTexture;
-                if(modelTexture == null)
-                    modelTexture = Texture2D.whiteTexture; 
+                if (modelTexture == null)
+                    modelTexture = Texture2D.whiteTexture;
 
                 Vector2 screenSize = new Vector2(width, height);
                 Vector2 modelTextureSize = modelTexture.texelSize;
@@ -164,13 +162,20 @@ public class WorldConstructPass : ScriptableRenderPass {
 
                 int csMainKernel = _shadowConstructComputeShader.FindKernel("CSMain");
                 _shadowConstructComputeShader.GetKernelThreadGroupSizes(
-                    csMainKernel, 
-                    out uint mainThreadnumThreadsX, 
-                    out uint mainThreadnumThreadsY, 
+                    csMainKernel,
+                    out uint mainThreadnumThreadsX,
+                    out uint mainThreadnumThreadsY,
                     out uint mainThreadnumThreadsZ
                 );
 
-                //ComputeBuffer meshTriangleBuffer = new ComputeBuffer(indexCount, Marshal.SizeOf(typeof(Vector3)), ComputeBufferType.Default);
+                int csPrepareKernel = _shadowConstructComputeShader.FindKernel("CSPrepareMain");
+                _shadowConstructComputeShader.GetKernelThreadGroupSizes(
+                    csMainKernel,
+                    out uint prepareThreadnumThreadsX,
+                    out uint prepareThreadnumThreadsY,
+                    out uint prepareThreadnumThreadsZ
+                );
+                ComputeBuffer meshTriangleBuffer = new ComputeBuffer(indexCount / 3, Marshal.SizeOf(typeof(MeshTriangleProperty)), ComputeBufferType.Structured);
 
                 //ComputeBuffer triangleIndexListBuffer = new ComputeBuffer(indexCount, Marshal.SizeOf(typeof(int)), ComputeBufferType.Append);
                 //triangleIndexListBuffer.SetCounterValue(0);
@@ -178,16 +183,16 @@ public class WorldConstructPass : ScriptableRenderPass {
                 commandBuffer.SetComputeTextureParam(_shadowConstructComputeShader, csMainKernel, "gWorldPositionTexture", resultWorldPositionRenderTexture);
                 commandBuffer.SetComputeTextureParam(_shadowConstructComputeShader, csMainKernel, "resultShadowTexture", resultShadowRenderTexture);
                 commandBuffer.SetComputeVectorParam(_shadowConstructComputeShader, "screenSize", screenSize);
-              
-                commandBuffer.SetComputeBufferParam(_shadowConstructComputeShader, csMainKernel, "modelVertices", vertexBuffer);
-                commandBuffer.SetComputeBufferParam(_shadowConstructComputeShader, csMainKernel, "modelIndices", indexBuffer);
-             
+
+                commandBuffer.SetComputeBufferParam(_shadowConstructComputeShader, csPrepareKernel, "modelVertices", vertexBuffer);
+                commandBuffer.SetComputeBufferParam(_shadowConstructComputeShader, csPrepareKernel, "modelIndices", indexBuffer);
+
                 commandBuffer.SetComputeIntParam(_shadowConstructComputeShader, "vertexStride", vertexBuffer.stride);
                 commandBuffer.SetComputeIntParam(_shadowConstructComputeShader, "indexCount", indexCount);
-              
+
                 commandBuffer.SetComputeTextureParam(_shadowConstructComputeShader, csMainKernel, "modelTexture", modelTexture);
                 commandBuffer.SetComputeVectorParam(_shadowConstructComputeShader, "modelTextureSize", modelTextureSize);
-              
+
                 commandBuffer.SetComputeMatrixParam(_shadowConstructComputeShader, "worldToObject", worldToobject);
                 commandBuffer.SetComputeMatrixParam(_shadowConstructComputeShader, "objectToWorld", objectToWorld);
 
@@ -195,9 +200,23 @@ public class WorldConstructPass : ScriptableRenderPass {
                 commandBuffer.SetComputeVectorParam(_shadowConstructComputeShader, "objectBound", objectBound / 2);
 
                 commandBuffer.SetComputeVectorParam(_shadowConstructComputeShader, "localLightDirection", localLightDirection);
-                commandBuffer.SetComputeVectorParam(_shadowConstructComputeShader, "globalLightDirection", globalLightDirection);          
+                commandBuffer.SetComputeVectorParam(_shadowConstructComputeShader, "globalLightDirection", globalLightDirection);
 
                 commandBuffer.SetComputeBufferParam(_shadowConstructComputeShader, csMainKernel, "debugBuffer", debugBuffer);
+
+                commandBuffer.SetComputeBufferParam(_shadowConstructComputeShader, csMainKernel, "meshTriangleBuffer", meshTriangleBuffer);
+                commandBuffer.SetComputeBufferParam(_shadowConstructComputeShader, csPrepareKernel, "meshTriangleBuffer", meshTriangleBuffer);
+
+                commandBuffer.DispatchCompute(
+                    _shadowConstructComputeShader,
+                    csPrepareKernel,
+                    Mathf.CeilToInt((indexCount / 3.0f) / prepareThreadnumThreadsX),
+                    1,
+                    1
+                );
+
+                commandBuffer.SetComputeIntParam(_shadowConstructComputeShader, "indexCount", (indexCount / 3));
+                Debug.Log(indexCount);
 
                 commandBuffer.DispatchCompute(
                     _shadowConstructComputeShader,
@@ -207,14 +226,14 @@ public class WorldConstructPass : ScriptableRenderPass {
                     1
                 );
 
-                if(readBuffer) {
+                if (readBuffer) {
                     debugBuffer.GetData(debugData);
                     readBuffer = false;
                 }
-               
+
 
                 string verts = "";
-                foreach(var vertex in mesh.vertices) {
+                foreach (var vertex in mesh.vertices) {
                     verts += vertex + "\n";
                 }
 
@@ -234,8 +253,8 @@ public class WorldConstructPass : ScriptableRenderPass {
         CommandBufferPool.Release(commandBuffer);
     }
 
-    // ƒŒƒ“ƒ_ƒŠƒ“ƒOˆ—Œã‚ÉŒÄ‚Î‚ê‚é
-    // ƒŒƒ“ƒ_ƒŠƒ“ƒOˆ—‚Ég—p‚µ‚½ƒŠƒ\[ƒX‚ğ•Ğ‚Ã‚¯‚½‚è‚·‚é
+    // ï¿½ï¿½ï¿½ï¿½ï¿½_ï¿½ï¿½ï¿½ï¿½ï¿½Oï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ÉŒÄ‚Î‚ï¿½ï¿½
+    // ï¿½ï¿½ï¿½ï¿½ï¿½_ï¿½ï¿½ï¿½ï¿½ï¿½Oï¿½ï¿½ï¿½ï¿½ï¿½Égï¿½pï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½\ï¿½[ï¿½Xï¿½ï¿½Ğ‚Ã‚ï¿½ï¿½ï¿½ï¿½è‚·ï¿½ï¿½
     public override void FrameCleanup(CommandBuffer cmd) {
     }
 }
