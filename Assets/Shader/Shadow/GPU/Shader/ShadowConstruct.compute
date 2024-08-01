@@ -2,7 +2,7 @@
 #pragma kernel CSMain
 #pragma kernel CSPrepareMain
 
-#define CLOSEVALUE -0.1
+#define CLOSEVALUE -0.05
 
 // Create a RenderTexture with enableRandomWrite flag and set it
 // with cs.SetTexture
@@ -105,7 +105,7 @@ void CSMain (uint3 id : SV_DispatchThreadID) {
     if(abs(closetPointToCenter.x) > objectBound.x || abs(closetPointToCenter.y) > objectBound.y || abs(closetPointToCenter.z) > objectBound.z)
         return;
     
-    //resultShadowTexture[id.xy] = 0.2;
+    resultShadowTexture[id.xy] = 0.2;
     
     float3 localPosition = mul(worldToObject, float4(worldPosition, 1)).xyz;
     
@@ -149,7 +149,7 @@ void CSMain (uint3 id : SV_DispatchThreadID) {
         //float t = (dotVN) / dot(-localLightDirection, normal);
         if (t > CLOSEVALUE)
             continue;
-
+        
          // progject receiver's point(pixel) to caster's surface
         float3 snapLocalPosition = localPosition + (localLightDirection * t);
 
@@ -158,8 +158,8 @@ void CSMain (uint3 id : SV_DispatchThreadID) {
         
         float3 snapLocalPositionToCenter = snapLocalPosition - center;
         
-        //if (dot(snapLocalPositionToCenter, snapLocalPositionToCenter) > dot(triangleCA, triangleCA))
-        //    continue;
+        if (dot(snapLocalPositionToCenter, snapLocalPositionToCenter) > dot(triangleCA, triangleCA))
+            continue;
             
         //use Barycentric Coordinates to determine is point inside trinagle
         float3 na = cross(BAVec, snapLocalPosition - pointA);

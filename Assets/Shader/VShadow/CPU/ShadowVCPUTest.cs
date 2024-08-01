@@ -55,8 +55,8 @@ public class ShadowVCPUTest : MonoBehaviour
 
             // if direction to closest point is opposite to received's surface normal 
             // or too close to receiver's point (consider as same point)
-            // then ignore
-            if (t > 0)
+            // then ignorevv
+            if (t > -0.05f)
                 continue;
 
             // progject receiver's point(pixel) to caster's surface
@@ -95,6 +95,10 @@ public class ShadowVCPUTest : MonoBehaviour
 
             Gizmos.color = Color.green;
             Gizmos.DrawSphere(snapLocalPosition, 0.05f);
+
+            Gizmos.DrawLine(pointA, pointB);
+            Gizmos.DrawLine(pointB, pointC);
+            Gizmos.DrawLine(pointC, pointA);
         }
     }
 }
