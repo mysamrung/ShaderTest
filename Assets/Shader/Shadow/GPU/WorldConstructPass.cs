@@ -216,8 +216,7 @@ public class WorldConstructPass : ScriptableRenderPass {
                 );
 
                 commandBuffer.SetComputeIntParam(_shadowConstructComputeShader, "indexCount", (indexCount / 3));
-                Debug.Log(indexCount);
-
+       
                 commandBuffer.DispatchCompute(
                     _shadowConstructComputeShader,
                     csMainKernel,
