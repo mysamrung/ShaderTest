@@ -2,7 +2,7 @@
 #pragma kernel CSMain
 #pragma kernel CSPrepareMain
 
-#define CLOSEVALUE -0.05
+#define CLOSEVALUE -0.1
 
 // Create a RenderTexture with enableRandomWrite flag and set it
 // with cs.SetTexture

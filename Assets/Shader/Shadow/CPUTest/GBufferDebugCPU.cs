@@ -181,18 +181,27 @@ public class GBufferDebugCPU : MonoBehaviour {
                 // progject receiver's point(pixel) to caster's surface
                 Vector3 snapLocalPosition = point - (lightDirection * (t));
 
-                // find uv at projected point on surface
-                Vector3 ua = Vector3.Cross(pointB - snapLocalPosition, pointC - snapLocalPosition);
-                Vector3 ub = Vector3.Cross(pointC - snapLocalPosition, pointA - snapLocalPosition);
-                Vector3 uc = Vector3.Cross(pointA - snapLocalPosition, pointB - snapLocalPosition);
+                //// find uv at projected point on surface
+                //Vector3 ua = Vector3.Cross(pointB - snapLocalPosition, pointC - snapLocalPosition);
+                //Vector3 ub = Vector3.Cross(pointC - snapLocalPosition, pointA - snapLocalPosition);
+                //Vector3 uc = Vector3.Cross(pointA - snapLocalPosition, pointB - snapLocalPosition);
 
-                if (Vector3.Dot(ua, ub) < dotOut)
-                    continue;
+                //if (Vector3.Dot(ua, ub) < dotOut)
+                //    continue;
 
-                if (Vector3.Dot(ua, uc) < dotOut)
-                    continue;
-
+                //if (Vector3.Dot(ua, uc) < dotOut)
+                //    continue;
+                
                 snapPos2.Add(snapLocalPosition);
+
+
+                float udn = Vector3.Cross(pointA - pointB, pointA - pointC).magnitude;
+                float uda = Vector3.Cross(pointB - snapLocalPosition, pointC - snapLocalPosition).magnitude / udn;
+                float udb = Vector3.Cross(pointC - snapLocalPosition, pointA - snapLocalPosition).magnitude / udn;
+                float udc = Vector3.Cross(pointA - snapLocalPosition, pointB - snapLocalPosition).magnitude / udn;
+
+                if(uda + udb + udc > 1 + dotOut)
+                    continue;
 
                 shadowVertices.Add(point);
                 Debug.Log(i);
